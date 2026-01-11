@@ -43,4 +43,8 @@ def check_strategy():
         print(f"Error: {e}")
 
 if __name__ == "__main__":
+   check_strategy()
+    if __name__ == "__main__":
+    send_wechat("Cloud Test", "GitHub Action is working!")
     check_strategy()
+
