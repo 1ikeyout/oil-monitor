@@ -6,57 +6,44 @@
     <title>Live Monitor</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        body { background-color: #000; color: #fff; font-family: sans-serif; padding: 20px; }
-        h1 { font-size: 40px; text-align: center; color: #ff9f00; }
-        .card { background: #1a1a1a; border-radius: 15px; padding: 20px; margin-bottom: 20px; border: 1px solid #333; }
-        .name { font-size: 30px; font-weight: bold; }
-        .price { font-size: 60px; color: #00ff00; font-weight: 800; }
-        .sma { font-size: 24px; color: #007aff; }
-        .chart { width: 100%; height: 400px; margin-top: 15px; }
+        body { background-color: #000; color: #fff; font-family: sans-serif; padding: 15px; margin: 0; }
+        .card { background: #111; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .title { font-size: 24px; color: #888; margin-bottom: 10px; }
+        /* Big Font for Mobile */
+        .price { font-size: 64px; font-weight: 800; color: #00ff00; line-height: 1; }
+        .sma { font-size: 24px; color: #007aff; margin-top: 10px; }
+        .chart { width: 100%; height: 300px; margin-top: 15px; }
     </style>
 </head>
 <body>
-    <h1>Market Monitor</h1>
-    <div id="app">Loading data...</div>
-
+    <div id="app">Loading...</div>
     <script>
-        async function init() {
-            try {
-                const res = await fetch('data.json');
-                const data = await res.json();
-                const app = document.getElementById('app');
-                app.innerHTML = '';
-
-                Object.keys(data).forEach(key => {
-                    const history = data[key];
-                    const last = history[history.length - 1];
-                    const div = document.createElement('div');
-                    div.className = 'card';
-                    div.innerHTML = `
-                        <div class="name">${key}</div>
-                        <div class="price">${last.price.toFixed(3)}</div>
-                        <div class="sma">SMA5: ${last.sma5.toFixed(3)}</div>
-                        <div id="c-${key}" class="chart"></div>
-                    `;
-                    app.appendChild(div);
-                    renderChart(`c-${key}`, history);
+        async function load() {
+            const r = await fetch('data.json');
+            const d = await r.json();
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+            Object.keys(d).forEach(k => {
+                const history = d[k];
+                const last = history[history.length - 1];
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `<div class="title">${k}</div><div class="price">${last.price.toFixed(3)}</div><div class="sma">SMA5: ${last.sma5.toFixed(3)}</div><div id="c-${k}" class="chart"></div>`;
+                app.appendChild(card);
+                const chart = echarts.init(document.getElementById(`c-${k}`));
+                chart.setOption({
+                    grid: { left: '12%', right: '5%', bottom: '15%', top: '10%' },
+                    xAxis: { type: 'category', data: history.map(h => h.time), axisLabel: { color: '#444' } },
+                    yAxis: { type: 'value', scale: true, axisLabel: { color: '#444' }, splitLine: { lineStyle: { color: '#222' } } },
+                    series: [
+                        { type: 'line', data: history.map(h => h.price), lineStyle: { color: '#00ff00', width: 3 }, symbol: 'none' },
+                        { type: 'line', data: history.map(h => h.sma5), lineStyle: { color: '#007aff', width: 2, type: 'dashed' }, symbol: 'none' }
+                    ]
                 });
-            } catch (e) { app.innerText = "Waiting for data.json... Run Actions first."; }
-        }
-
-        function renderChart(id, history) {
-            const chart = echarts.init(document.getElementById(id));
-            chart.setOption({
-                grid: { left: '10%', right: '5%', bottom: '15%' },
-                xAxis: { type: 'category', data: history.map(h => h.time), axisLabel: { color: '#666' } },
-                yAxis: { type: 'value', scale: true, axisLabel: { color: '#666' }, splitLine: { lineStyle: { color: '#222' } } },
-                series: [
-                    { name: 'Price', type: 'line', data: history.map(h => h.price), lineStyle: { color: '#00ff00', width: 3 }, symbol: 'none' },
-                    { name: 'SMA5', type: 'line', data: history.map(h => h.sma5), lineStyle: { color: '#007aff', width: 2, type: 'dashed' }, symbol: 'none' }
-                ]
             });
         }
-        init();
+        load();
+        setInterval(load, 60000);
     </script>
 </body>
 </html>
