@@ -1,87 +1,63 @@
 import akshare as ak
 import pandas as pd
 import requests
-import time
+import os
 from datetime import datetime
 
-# --- Configuration ---
-# Replace with your actual credentials
-TG_TOKEN = "YOUR_BOT_TOKEN"
-CHAT_ID = "YOUR_CHAT_ID"
+# Credentials from GitHub Secrets
+TG_TOKEN = os.environ.get('TG_TOKEN')
+TG_CHAT_ID = os.environ.get('TG_CHAT_ID')
 
-# Tickers to monitor
+# Monitoring Targets
 TARGETS = [
-    {"symbol": "油气开采及服务", "type": "sector", "name": "Oil & Gas Sector (881107)"},
-    {"symbol": "159309", "type": "etf", "name": "Oil & Gas ETF (159309)"},
-    {"symbol": "159588", "type": "etf", "name": "Petro & Gas ETF (159588)"}
+    {"symbol": "油气开采及服务", "type": "sector", "name": "Sector 881107"},
+    {"symbol": "159309", "type": "etf", "name": "ETF 159309"},
+    {"symbol": "159588", "type": "etf", "name": "ETF 159588"}
 ]
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-    payload = {"chat_id": CHAT_ID, "text": message}
+    payload = {"chat_id": TG_CHAT_ID, "text": message}
     try:
-        res = requests.post(url, json=payload, timeout=10)
-        if res.status_code != 200:
-            print(f"Notification Error: {res.text}")
+        requests.post(url, json=payload, timeout=10)
     except Exception as e:
-        print(f"Connection Failed: {e}")
+        print(f"Error: {e}")
 
-def get_market_data(target):
-    try:
-        if target['type'] == "sector":
-            df = ak.stock_board_industry_hist_em(
-                symbol=target['symbol'], 
-                period="daily", 
-                start_date="20250101", 
-                adjust="qfq"
-            )
-        else:
-            df = ak.fund_etf_hist_em(
-                symbol=target['symbol'], 
-                period="daily", 
-                start_date="20250101", 
-                adjust="qfq"
-            )
-        return df
-    except Exception as e:
-        print(f"Data Fetch Error ({target['symbol']}): {e}")
-        return None
-
-def execute_strategy():
-    print(f"[{datetime.now()}] Scanning targets...")
+def run_analysis():
+    print(f"Process started at: {datetime.now()}")
     for item in TARGETS:
-        df = get_market_data(item)
-        if df is None or len(df) < 15:
-            continue
+        try:
+            if item['type'] == "sector":
+                df = ak.stock_board_industry_hist_em(symbol=item['symbol'], period="daily", start_date="20250101", adjust="qfq")
+            else:
+                df = ak.fund_etf_hist_em(symbol=item['symbol'], period="daily", start_date="20250101", adjust="qfq")
             
-        df = df.sort_values('日期' if '日期' in df.columns else 'date')
-        val_col = '收盘' if '收盘' in df.columns else 'close'
-        
-        # Technical Indicators
-        df['SMA3'] = df[val_col].rolling(window=3).mean()
-        df['SMA5'] = df[val_col].rolling(window=5).mean()
-        df['SMA10'] = df[val_col].rolling(window=10).mean()
+            if df is None or len(df) < 15: continue
+            
+            # Standardization
+            date_col = '日期' if '日期' in df.columns else 'date'
+            price_col = '收盘' if '收盘' in df.columns else 'close'
+            df = df.sort_values(date_col)
 
-        last = df.iloc[-1]
-        prev = df.iloc[-2]
-        price = last[val_col]
-        name = item['name']
+            # Calculation: SMA
+            df['SMA3'] = df[price_col].rolling(window=3).mean()
+            df['SMA5'] = df[price_col].rolling(window=5).mean()
+            df['SMA10'] = df[price_col].rolling(window=10).mean()
 
-        # Signal 1: 3/10 SMA Crossover
-        if prev['SMA3'] <= prev['SMA10'] and last['SMA3'] > last['SMA10']:
-            send_telegram(f"🚨 {name}: FAST BUY\n3/10 Golden Cross at {price}")
-        elif prev['SMA3'] >= prev['SMA10'] and last['SMA3'] < last['SMA10']:
-            send_telegram(f"🚨 {name}: FAST SELL\n3/10 Death Cross at {price}")
-        
-        # Signal 2: Price vs SMA5 Breakout
-        elif prev[val_col] <= prev['SMA5'] and last[val_col] > last['SMA5']:
-            send_telegram(f"📈 {name}: Breakout UP\nPrice crossed SMA5 at {price}")
-        elif prev[val_col] >= prev['SMA5'] and last[val_col] < last['SMA5']:
-            send_telegram(f"📉 {name}: Breakout DOWN\nPrice fell below SMA5 at {price}")
+            last, prev = df.iloc[-1], df.iloc[-2]
+            price, name = last[price_col], item['name']
+
+            # Strategy Logic
+            if prev['SMA3'] <= prev['SMA10'] and last['SMA3'] > last['SMA10']:
+                send_telegram(f"🚨 {name}: BUY (3/10 Golden Cross) at {price}")
+            elif prev['SMA3'] >= prev['SMA10'] and last['SMA3'] < last['SMA10']:
+                send_telegram(f"🚨 {name}: SELL (3/10 Death Cross) at {price}")
+            elif prev[price_col] <= prev['SMA5'] and last[price_col] > last['SMA5']:
+                send_telegram(f"📈 {name}: Price Breakout UP (SMA5) at {price}")
+            elif prev[price_col] >= prev['SMA5'] and last[price_col] < last['SMA5']:
+                send_telegram(f"📉 {name}: Price Breakout DOWN (SMA5) at {price}")
+        except Exception as e:
+            print(f"Error on {item['name']}: {e}")
 
 if __name__ == "__main__":
-    send_telegram("Monitor Online: A-Share Oil & Gas Assets.")
-    while True:
-        execute_strategy()
-        # Precise 15-minute interval
-        time.sleep(900)
+    run_analysis()
