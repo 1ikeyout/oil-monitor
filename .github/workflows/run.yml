@@ -1,4 +1,4 @@
-name: Oil Monitor Automation
+name: Financial Monitor
 
 on:
   schedule:
@@ -22,5 +22,6 @@ jobs:
 
       - name: Run script
         env:
-          MY_SEND_KEY: ${{ secrets.MY_SEND_KEY }}
-        run: python oil_monitor.py
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python monitor.py
